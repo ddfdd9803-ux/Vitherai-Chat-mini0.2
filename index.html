@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>VitherAI Chat</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+
+:root {
+  --bg-light: #f3e8ff;
+  --bg-dark: #2b1a3d;
+  --chat-light: #ffffff;
+  --chat-dark: #3a2c4d;
+  --user-light: #9c27b0;
+  --user-dark: #ab47bc;
+  --bot-light: #e0d4f7;
+  --bot-dark: #5c4b7a;
+  --text-light: #333;
+  --text-dark: #f0f0f0;
+  --transition-speed: 0.4s;
+}
+
+body {
+  margin:0; padding:0;
+  font-family:'Roboto',sans-serif;
+  display:flex; justify-content:center; align-items:center;
+  height:100vh;
+  background: linear-gradient(135deg,#a18cd1,#fbc2eb);
+  transition: background var(--transition-speed);
+}
+
+#container {
+  width:420px; max-height:600px;
+  background: var(--chat-light);
+  border-radius:20px;
+  display:flex; flex-direction:column;
+  box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+  overflow:hidden;
+  transition: background var(--transition-speed);
+}
+
+#chat {
+  flex:1;
+  padding:20px;
+  overflow-y:auto;
+  background: inherit;
+  display:flex;
+  flex-direction:column;
+}
+
+.message {
+  margin:10px 0;
+  padding:10px 15px;
+  border-radius:15px;
+  max-width:80%;
+  word-wrap:break-word;
+  opacity:0;
+  transform: translateY(10px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.message.show {
+  opacity:1;
+  transform: translateY(0);
+}
+
+.user {
+  background: var(--user-light);
+  color: #fff;
+  align-self:flex-end;
+  border-bottom-right-radius:0;
+  transition: background var(--transition-speed);
+}
+
+.bot {
+  background: var(--bot-light);
+  color: var(--text-light);
+  align-self:flex-start;
+  border-bottom-left-radius:0;
+  white-space: pre-wrap;
+  transition: background var(--transition-speed), color var(--transition-speed);
+}
+
+#inputArea {
+  display:flex; padding:10px;
+  background: inherit; border-top:1px solid #ccc;
+}
+
+#userInput {
+  flex:1; padding:10px;
+  border-radius:15px; border:1px solid #ccc;
+  outline:none; font-size:16px;
+}
+
+#sendBtn {
+  padding:10px 15px; margin-left:10px;
+  border-radius:15px; border:none;
+  background:#9c27b0; color:#fff; cursor:pointer; font-weight:bold;
+  transition: background 0.3s;
+}
+
+#sendBtn:hover { background:#8e24aa; }
+
+#themeBtn {
+  margin:5px; padding:5px 10px; border:none;
+  border-radius:10px; background:#888; color:#fff;
+  cursor:pointer; align-self:flex-end;
+  transition: background 0.3s;
+}
+
+#themeBtn:hover { background:#666; }
+</style>
+</head>
+<body>
+
+<div id="container">
+  <button id="themeBtn">Сменить тему</button>
+  <div id="chat"></div>
+  <div id="inputArea">
+    <input type="text" id="userInput" placeholder="Напиши сообщение...">
+    <button id="sendBtn">Отправить</button>
+  </div>
+</div>
+
+<script>
+const chat = document.getElementById("chat");
+const userInput = document.getElementById("userInput");
+const sendBtn = document.getElementById("sendBtn");
+const themeBtn = document.getElementById("themeBtn");
+
+let darkMode = false;
+
+// Dataset загружается с GitHub Pages или из той же папки
+let dataset = {};
+fetch('dataset67.txt')
+.then(res => res.text())
+.then(text => {
+  const lines = text.split(/\r?\n/);
+  lines.forEach(line=>{
+    if(!line.includes('|')) return;
+    const parts = line.split('|');
+    if(parts.length < 2) return;
+    const key = parts[0].trim();
+    const value = parts[1].trim();
+    if(!key || !value) return;
+    if(!dataset[key]) dataset[key] = [];
+    dataset[key].push(value);
+  });
+  console.log("Dataset загружен:", dataset);
+})
+.catch(err=>console.error("Ошибка dataset:",err));
+
+// Приветствие при загрузке
+addMessage("Привет, я VitherAI!", 'bot', true);
+
+// Отправка сообщения
+function sendMessage(){
+  const text = userInput.value.trim();
+  if(!text) return;
+  addMessage(text,'user',true);
+  userInput.value='';
+  // Эффект "бот думает..."
+  addMessageTyping("...",'bot',()=>{
+    const response = generateResponse(text);
+    updateLastBotMessage(response);
+  },800);
+}
+
+// Добавление обычного сообщения
+function addMessage(text,sender,animate=true){
+  const div=document.createElement('div');
+  div.className='message '+sender;
+  div.textContent=text;
+  chat.appendChild(div);
+  if(animate){
+    setTimeout(()=>div.classList.add('show'),50);
+  } else {
+    div.classList.add('show');
+  }
+  chat.scrollTop = chat.scrollHeight;
+}
+
+// Эффект печатающего текста с callback
+function addMessageTyping(text,sender,callback,duration=40){
+  const div=document.createElement('div');
+  div.className='message '+sender;
+  chat.appendChild(div);
+  setTimeout(()=>div.classList.add('show'),50);
+  chat.scrollTop = chat.scrollHeight;
+
+  let index=0;
+  const interval = setInterval(()=>{
+    div.textContent += text[index];
+    index++;
+    chat.scrollTop = chat.scrollHeight;
+    if(index>=text.length) {
+      clearInterval(interval);
+      if(callback) callback();
+    }
+  },duration);
+}
+
+// Обновление последнего сообщения бота
+function updateLastBotMessage(text){
+  const msgs = chat.querySelectorAll('.bot');
+  if(msgs.length==0) return;
+  const last = msgs[msgs.length-1];
+  last.textContent = '';
+  let index=0;
+  const interval = setInterval(()=>{
+    last.textContent += text[index];
+    index++;
+    chat.scrollTop = chat.scrollHeight;
+    if(index>=text.length) clearInterval(interval);
+  },40);
+}
+
+// Генерация ответа
+function generateResponse(inputText){
+  const t = inputText.toLowerCase().trim();
+  let bestKey = null;
+  let maxMatch = 0;
+
+  for(let key in dataset){
+    const keyLower = key.toLowerCase();
+    let matchLength = 0;
+    for(let i=0;i<t.length;i++){
+      if(keyLower.startsWith(t.substr(i))) matchLength = Math.max(matchLength, keyLower.length - i);
+    }
+    if(matchLength>maxMatch){
+      maxMatch = matchLength;
+      bestKey = key;
+    }
+  }
+
+  if(bestKey){
+    const responses = dataset[bestKey];
+    return responses[Math.floor(Math.random()*responses.length)];
+  }
+
+  return "Хмм… я пока не знаю, что ответить на это 😅";
+}
+
+// Смена темы
+themeBtn.addEventListener('click',()=>{
+  darkMode = !darkMode;
+  document.body.style.background = darkMode ? "linear-gradient(135deg,#2b1a3d,#5c2a7a)" : "linear-gradient(135deg,#a18cd1,#fbc2eb)";
+  document.getElementById("container").style.background = darkMode ? "var(--chat-dark)" : "var(--chat-light)";
+  const messages = document.querySelectorAll('.bot');
+  messages.forEach(m=>m.style.background = darkMode ? "var(--bot-dark)" : "var(--bot-light)");
+  const userMsgs = document.querySelectorAll('.user');
+  userMsgs.forEach(m=>m.style.background = darkMode ? "var(--user-dark)" : "var(--user-light)");
+});
+
+sendBtn.addEventListener('click',sendMessage);
+userInput.addEventListener('keypress',e=>{if(e.key==='Enter') sendMessage();});
+</script>
+
+</body>
+</html>
